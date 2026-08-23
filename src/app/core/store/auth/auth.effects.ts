@@ -10,6 +10,7 @@ import { WebsocketService } from '../../services/websocket.service';
 import { NotificationService } from '../../services/notification.service';
 import { SessionBusService } from '../../services/session-bus.service';
 import { ApiService } from '../../services/api.service';
+import { PwaService } from '../../services/pwa.service';
 import { Router } from '@angular/router';
 import { connectWalletSuccess } from '../wallet/wallet.actions';
 import { selectAuthToken } from './auth.selectors';
@@ -26,6 +27,7 @@ export class AuthEffects implements OnInitEffects {
   private readonly notificationService = inject(NotificationService);
   private readonly sessionBus = inject(SessionBusService);
   private readonly apiService = inject(ApiService);
+  private readonly pwaService = inject(PwaService);
   private readonly router = inject(Router);
 
   /**
@@ -202,6 +204,7 @@ export class AuthEffects implements OnInitEffects {
           localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
           this.walletService.disconnect();
           this.wsService.disconnect();
+          this.pwaService.clearDataCaches();
           if (action.type === AuthActions.forceLogout.type) {
             this.notificationService.warning('Session expired', 'Please sign in again');
           } else {

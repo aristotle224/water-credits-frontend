@@ -42,6 +42,14 @@ export class ApiService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        if (config.url && config.headers) {
+          const isSensitive = /^\/?(retirements|credits|analytics|marketplace)(\/|$)/.test(
+            config.url,
+          );
+          if (isSensitive) {
+            config.headers['Cache-Control'] = 'no-store';
+          }
+        }
         return config;
       },
       (error) => Promise.reject(error),

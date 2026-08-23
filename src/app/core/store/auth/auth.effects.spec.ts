@@ -20,6 +20,7 @@ import { WebsocketService } from '../../services/websocket.service';
 import { NotificationService } from '../../services/notification.service';
 import { SessionBusService } from '../../services/session-bus.service';
 import { ApiService } from '../../services/api.service';
+import { PwaService } from '../../services/pwa.service';
 import * as AuthActions from './auth.actions';
 import { reducers } from '../app.state';
 import { UserRole } from '../../models/user.model';
@@ -75,6 +76,10 @@ describe('AuthEffects', () => {
     setTokenProvider: vi.fn(),
   };
 
+  const pwaServiceMock = {
+    clearDataCaches: vi.fn(),
+  };
+
   beforeEach(() => {
     actions$ = new Subject<Action>();
     vi.clearAllMocks();
@@ -96,6 +101,7 @@ describe('AuthEffects', () => {
         { provide: WebsocketService, useValue: wsServiceMock },
         { provide: NotificationService, useValue: notificationServiceMock },
         { provide: ApiService, useValue: apiServiceMock },
+        { provide: PwaService, useValue: pwaServiceMock },
         SessionBusService,
       ],
     });
@@ -175,6 +181,7 @@ describe('AuthEffects', () => {
       expect(localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)).toBeNull();
       expect(walletServiceMock.disconnect).toHaveBeenCalled();
       expect(wsServiceMock.disconnect).toHaveBeenCalled();
+      expect(pwaServiceMock.clearDataCaches).toHaveBeenCalled();
       expect(notificationServiceMock.info).toHaveBeenCalled();
       expect(router.navigateByUrl).toHaveBeenCalledWith('/auth/login');
     });
@@ -189,6 +196,7 @@ describe('AuthEffects', () => {
       expect(notificationServiceMock.warning).toHaveBeenCalled();
       expect(notificationServiceMock.info).not.toHaveBeenCalled();
       expect(wsServiceMock.disconnect).toHaveBeenCalled();
+      expect(pwaServiceMock.clearDataCaches).toHaveBeenCalled();
       expect(router.navigateByUrl).toHaveBeenCalledWith('/auth/login');
     });
   });
