@@ -8,7 +8,7 @@ import * as SensorsActions from './sensors.actions';
 import { WebsocketService } from '../../services/websocket.service';
 import { NotificationService } from '../../services/notification.service';
 import { SensorsService } from '../../services/sensors.service';
-import { SensorReading, SensorAlert } from '../../models/sensor-reading.model';
+import { SensorDevice, SensorReading, SensorAlert } from '../../models/sensor-reading.model';
 import { firstValueFrom } from 'rxjs';
 import { vi, describe, beforeEach, it, expect } from 'vitest';
 
@@ -20,6 +20,19 @@ describe('SensorsEffects', () => {
   let sensorsServiceMock: any;
   let routerEvents$: Subject<any>;
   let routerMock: any;
+
+  const mockDevice: SensorDevice = {
+    id: 'device-1',
+    deviceId: 'device-1',
+    projectId: 'project-1',
+    manufacturer: 'Acme Sensors',
+    model: 'AQ-100',
+    parameters: ['ph', 'turbidity'],
+    publicKey: 'GABC123',
+    isActive: true,
+    lastReadingAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
 
   const mockReading: SensorReading = {
     id: 'reading-123',
@@ -67,6 +80,7 @@ describe('SensorsEffects', () => {
 
     sensorsServiceMock = {
       getDevices: vi.fn().mockResolvedValue([]),
+      getReadings: vi.fn().mockResolvedValue([]),
       getLatestReadings: vi.fn().mockResolvedValue([]),
     };
 
@@ -133,6 +147,66 @@ describe('SensorsEffects', () => {
     });
   });
 
+  describe('loadDevices$', () => {
+    it('emits loadDevicesSuccess with devices on successful fetch', async () => {
+      sensorsServiceMock.getDevices.mockResolvedValue([mockDevice]);
+      const resultPromise = firstValueFrom(effects.loadDevices$);
+      actions$.next(SensorsActions.loadDevices({ projectId: 'project-1' }));
+      const action = await resultPromise;
+
+      expect(sensorsServiceMock.getDevices).toHaveBeenCalledWith('project-1');
+      expect(action).toEqual(
+        SensorsActions.loadDevicesSuccess({
+          devices: [mockDevice],
+        }),
+      );
+    });
+
+    it('emits loadDevicesFailure on error', async () => {
+      sensorsServiceMock.getDevices.mockRejectedValue(new Error('Network error'));
+      const resultPromise = firstValueFrom(effects.loadDevices$);
+      actions$.next(SensorsActions.loadDevices({}));
+      const action = await resultPromise;
+
+      expect(sensorsServiceMock.getDevices).toHaveBeenCalledWith(undefined);
+      expect(action).toEqual(
+        SensorsActions.loadDevicesFailure({
+          error: 'Network error',
+        }),
+      );
+    });
+  });
+
+  describe('loadReadings$', () => {
+    it('emits loadReadingsSuccess with readings on successful fetch', async () => {
+      sensorsServiceMock.getReadings.mockResolvedValue([mockReading]);
+      const resultPromise = firstValueFrom(effects.loadReadings$);
+      actions$.next(SensorsActions.loadReadings({ deviceId: 'device-1' }));
+      const action = await resultPromise;
+
+      expect(sensorsServiceMock.getReadings).toHaveBeenCalledWith('device-1');
+      expect(action).toEqual(
+        SensorsActions.loadReadingsSuccess({
+          readings: [mockReading],
+        }),
+      );
+    });
+
+    it('emits loadReadingsFailure on error', async () => {
+      sensorsServiceMock.getReadings.mockRejectedValue(new Error('Readings fetch failed'));
+      const resultPromise = firstValueFrom(effects.loadReadings$);
+      actions$.next(SensorsActions.loadReadings({ deviceId: 'device-1' }));
+      const action = await resultPromise;
+
+      expect(sensorsServiceMock.getReadings).toHaveBeenCalledWith('device-1');
+      expect(action).toEqual(
+        SensorsActions.loadReadingsFailure({
+          error: 'Readings fetch failed',
+        }),
+      );
+    });
+  });
+
   describe('loadProjectReadings$', () => {
     it('emits loadProjectReadingsSuccess with readings', async () => {
       sensorsServiceMock.getLatestReadings.mockResolvedValue([mockReading]);
@@ -145,6 +219,21 @@ describe('SensorsEffects', () => {
         SensorsActions.loadProjectReadingsSuccess({
           projectId: 'project-1',
           readings: [mockReading],
+        }),
+      );
+    });
+
+    it('emits loadProjectReadingsFailure on error', async () => {
+      sensorsServiceMock.getLatestReadings.mockRejectedValue(new Error('Project readings error'));
+      const resultPromise = firstValueFrom(effects.loadProjectReadings$);
+      actions$.next(SensorsActions.loadProjectReadings({ projectId: 'project-1' }));
+      const action = await resultPromise;
+
+      expect(sensorsServiceMock.getLatestReadings).toHaveBeenCalledWith('project-1');
+      expect(action).toEqual(
+        SensorsActions.loadProjectReadingsFailure({
+          projectId: 'project-1',
+          error: 'Project readings error',
         }),
       );
     });

@@ -11,15 +11,12 @@ import {
   DataTableComponent,
   ColumnDef,
 } from '../../../shared/components/data-table/data-table.component';
-import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge';
-import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state';
 import { SkeletonLoaderComponent } from '../../../shared/components/skeleton-loader/skeleton-loader';
 import {
   SensorChartComponent,
   ChartSeries,
 } from '../../../shared/components/sensor-chart/sensor-chart';
 import { DateFormatPipe } from '../../../shared/pipes/date-format.pipe';
-import { NumberAbbreviatePipe } from '../../../shared/pipes/number-abbreviate.pipe';
 import * as SensorsActions from '../../../core/store/sensors/sensors.actions';
 import {
   selectSensorDevices,
@@ -101,12 +98,9 @@ const STATUS_THRESHOLDS: Record<string, { good: [number, number]; warning: [numb
     DecimalPipe,
     RouterLink,
     DataTableComponent,
-    StatusBadgeComponent,
-    EmptyStateComponent,
     SkeletonLoaderComponent,
     SensorChartComponent,
     DateFormatPipe,
-    NumberAbbreviatePipe,
     LucideAngularModule,
   ],
   template: `

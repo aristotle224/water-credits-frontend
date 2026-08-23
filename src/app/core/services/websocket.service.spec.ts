@@ -1,16 +1,7 @@
 import { vi, describe, afterEach, it, expect } from 'vitest';
-import { WebsocketService } from './websocket.service';
+import { WebsocketService, SocketIoFactory } from './websocket.service';
 import { LoggingService } from './logging.service';
-
-// ---------------------------------------------------------------------------
-// Mock socket.io-client so no real network connection is attempted.
-// The mock is hoisted before any imports by vitest's module mocking system.
-// ---------------------------------------------------------------------------
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => createSocketStub()),
-}));
-
-import { io } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 
 // ---------------------------------------------------------------------------
 // Minimal Socket.IO socket stub — tracks listeners by reference so we can
@@ -67,16 +58,20 @@ const loggingMock: LoggingService = {
   debug: vi.fn(),
 } as unknown as LoggingService;
 
-function makeService(): { service: WebsocketService; socket: ReturnType<typeof createSocketStub> } {
+function makeService(): {
+  service: WebsocketService;
+  socket: ReturnType<typeof createSocketStub>;
+  socketFactory: ReturnType<typeof vi.fn>;
+} {
   const socket = createSocketStub();
-  (io as ReturnType<typeof vi.fn>).mockReturnValueOnce(socket);
+  const socketFactory = vi.fn(() => socket as unknown as Socket);
 
-  const service = new WebsocketService(loggingMock);
+  const service = new WebsocketService(loggingMock, socketFactory as unknown as SocketIoFactory);
   // Open the socket so on<T>() does not immediately error.
   service.connect('test-token', 'user-1');
 
-  // The socket stored internally is the one `io` just returned.
-  return { service, socket };
+  // The socket stored internally is the one socketFactory returned.
+  return { service, socket, socketFactory };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,11 +195,11 @@ describe('WebsocketService', () => {
 
   describe('connect()', () => {
     it('disconnects an existing socket before opening a new connection', () => {
-      const { service, socket: firstSocket } = makeService();
+      const { service, socket: firstSocket, socketFactory } = makeService();
 
       // Prepare a second stub for the reconnect.
       const secondSocket = createSocketStub();
-      (io as ReturnType<typeof vi.fn>).mockReturnValueOnce(secondSocket);
+      socketFactory.mockReturnValueOnce(secondSocket as unknown as Socket);
 
       service.connect('new-token', 'user-2');
 
@@ -270,8 +265,11 @@ describe('WebsocketService', () => {
 
     it('delivers events to subscribers that attached before connect()', () => {
       const socket = createSocketStub();
-      (io as ReturnType<typeof vi.fn>).mockReturnValueOnce(socket);
-      const service = new WebsocketService(loggingMock);
+      const socketFactory = vi.fn(() => socket as unknown as Socket);
+      const service = new WebsocketService(
+        loggingMock,
+        socketFactory as unknown as SocketIoFactory,
+      );
 
       const received: unknown[] = [];
       const errors: unknown[] = [];
@@ -303,14 +301,23 @@ describe('WebsocketService', () => {
     });
 
     it('keeps delivering on the same stream after disconnect() → connect()', () => {
-      const { service } = makeService();
-      const received: unknown[] = [];
+      const socket1 = createSocketStub();
+      const secondSocket = createSocketStub();
+      const socketFactory = vi
+        .fn()
+        .mockReturnValueOnce(socket1 as unknown as Socket)
+        .mockReturnValueOnce(secondSocket as unknown as Socket);
 
+      const service = new WebsocketService(
+        loggingMock,
+        socketFactory as unknown as SocketIoFactory,
+      );
+      service.connect('test-token', 'user-1');
+
+      const received: unknown[] = [];
       const sub = service.sensorReadings$.subscribe((r) => received.push(r));
 
       service.disconnect();
-      const secondSocket = createSocketStub();
-      (io as ReturnType<typeof vi.fn>).mockReturnValueOnce(secondSocket);
       service.connect('new-token', 'user-2');
 
       secondSocket.trigger('sensor:reading', { ph: 6.5 });

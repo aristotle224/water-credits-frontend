@@ -1,9 +1,16 @@
-import { Injectable } from '@angular/core';
+import { Injectable, InjectionToken, Optional, Inject } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../../environments/environment';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { LoggingService } from './logging.service';
 import { SensorReading, SensorAlert } from '../models/sensor-reading.model';
+
+export type SocketIoFactory = (url: string, opts?: Parameters<typeof io>[1]) => Socket;
+
+export const SOCKET_IO_FACTORY = new InjectionToken<SocketIoFactory>('SOCKET_IO_FACTORY', {
+  providedIn: 'root',
+  factory: () => io,
+});
 
 @Injectable({
   providedIn: 'root',
@@ -53,8 +60,14 @@ export class WebsocketService {
    * ref-counted.
    */
   private sensorHandlersAttached = false;
+  private socketIoFactory: SocketIoFactory;
 
-  constructor(private loggingService: LoggingService) {}
+  constructor(
+    private loggingService: LoggingService,
+    @Optional() @Inject(SOCKET_IO_FACTORY) socketIoFactory?: SocketIoFactory,
+  ) {
+    this.socketIoFactory = socketIoFactory ?? io;
+  }
 
   /** Register the stable sensor handlers on the current socket, if needed. */
   private attachSensorHandlers(): void {
@@ -95,7 +108,7 @@ export class WebsocketService {
       this.socket.disconnect();
     }
 
-    this.socket = io(`${environment.wsUrl}/notifications`, {
+    this.socket = this.socketIoFactory(`${environment.wsUrl}/notifications`, {
       query: { token, userId },
       transports: ['websocket'],
       autoConnect: true,

@@ -88,6 +88,24 @@ export class SensorsEffects {
     ),
   );
 
+  loadReadings$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(SensorsActions.loadReadings),
+      switchMap(({ deviceId }) =>
+        from(this.sensorsService.getReadings(deviceId)).pipe(
+          map((readings) => SensorsActions.loadReadingsSuccess({ readings })),
+          catchError((error) =>
+            of(
+              SensorsActions.loadReadingsFailure({
+                error: error instanceof Error ? error.message : 'Failed to load readings',
+              }),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   loadProjectReadings$ = createEffect(() =>
     this.actions$.pipe(
       ofType(SensorsActions.loadProjectReadings),
