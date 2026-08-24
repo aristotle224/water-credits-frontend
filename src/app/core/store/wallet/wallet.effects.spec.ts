@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { Subject, firstValueFrom, EMPTY } from 'rxjs';
+import { Subject, firstValueFrom, EMPTY, toArray, take } from 'rxjs';
 import { Action } from '@ngrx/store';
 
 import { WalletEffects } from './wallet.effects';
@@ -33,6 +33,7 @@ const mockToken = 'mock-jwt-token';
 interface WalletServiceMock {
   checkConnection: ReturnType<typeof vi.fn>;
   getStoredPublicKey: ReturnType<typeof vi.fn>;
+  getActiveProviderType: ReturnType<typeof vi.fn>;
   addressChange$: Subject<string> | typeof EMPTY;
   networkChange$: typeof EMPTY;
 }
@@ -41,6 +42,7 @@ function buildWalletServiceMock(overrides: Partial<WalletServiceMock> = {}): Wal
   return {
     checkConnection: vi.fn(),
     getStoredPublicKey: vi.fn(),
+    getActiveProviderType: vi.fn().mockReturnValue('freighter'),
     addressChange$: EMPTY,
     networkChange$: EMPTY,
     ...overrides,
@@ -85,47 +87,56 @@ describe('WalletEffects', () => {
   // ── rehydrateWalletOnLogin$ ──────────────────────────────────────────────────
 
   describe('rehydrateWalletOnLogin$', () => {
-    it('dispatches connectWalletSuccess when Freighter is connected and address is not yet set', async () => {
+    it('dispatches selectWalletProvider + connectWalletSuccess when Freighter is connected and address is not yet set', async () => {
       setup(
         {
           checkConnection: vi.fn().mockResolvedValue(true),
           getStoredPublicKey: vi.fn().mockReturnValue(mockAddress),
+          getActiveProviderType: vi.fn().mockReturnValue('freighter'),
         },
         null, // WalletState.address is null — rehydration needed
       );
 
-      const resultPromise = firstValueFrom(effects.rehydrateWalletOnLogin$);
+      // Collect two actions emitted from the effect
+      const twoActionsPromise = firstValueFrom(
+        effects.rehydrateWalletOnLogin$.pipe(take(2), toArray()),
+      );
       actions$.next(AuthActions.loginSuccess({ user: mockUser, token: mockToken }));
-      const action = await resultPromise;
+      const emitted = await twoActionsPromise;
 
-      expect(action).toEqual(WalletActions.connectWalletSuccess({ address: mockAddress }));
+      expect(emitted).toContainEqual(
+        WalletActions.selectWalletProvider({ providerType: 'freighter' }),
+      );
+      expect(emitted).toContainEqual(WalletActions.connectWalletSuccess({ address: mockAddress }));
       expect(walletServiceMock.checkConnection).toHaveBeenCalledTimes(1);
     });
 
-    it('dispatches nothing when Freighter is not connected (race condition on rehydration)', async () => {
+    it('dispatches only selectWalletProvider when Freighter is not connected (race condition on rehydration)', async () => {
       setup(
         {
           checkConnection: vi.fn().mockResolvedValue(false),
           getStoredPublicKey: vi.fn().mockReturnValue(null),
+          getActiveProviderType: vi.fn().mockReturnValue('freighter'),
         },
         null,
       );
 
-      // Collect everything emitted for 50 ms — expect zero emissions.
       const emissions: Action[] = [];
       const sub = effects.rehydrateWalletOnLogin$.subscribe((a) => emissions.push(a));
 
       actions$.next(AuthActions.loginSuccess({ user: mockUser, token: mockToken }));
 
-      // Let the async checkConnection() resolve and the effect pipeline tick.
       await new Promise((resolve) => setTimeout(resolve, 50));
       sub.unsubscribe();
 
-      expect(emissions).toHaveLength(0);
+      expect(emissions).toHaveLength(1);
+      expect(emissions[0]).toEqual(
+        WalletActions.selectWalletProvider({ providerType: 'freighter' }),
+      );
       expect(walletServiceMock.checkConnection).toHaveBeenCalledTimes(1);
     });
 
-    it('skips checkConnection when WalletState.address is already populated', async () => {
+    it('skips checkConnection entirely when WalletState.address is already populated', async () => {
       // AuthEffects.login$ has already set the address before loginSuccess fired.
       setup(
         {
@@ -142,9 +153,29 @@ describe('WalletEffects', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       sub.unsubscribe();
 
-      // Effect should not call checkConnection and should not dispatch.
       expect(walletServiceMock.checkConnection).not.toHaveBeenCalled();
       expect(emissions).toHaveLength(0);
+    });
+
+    it('dispatches selectWalletProvider with the persisted lobstr type on rehydration', async () => {
+      setup(
+        {
+          checkConnection: vi.fn().mockResolvedValue(true),
+          getStoredPublicKey: vi.fn().mockReturnValue(mockAddress),
+          getActiveProviderType: vi.fn().mockReturnValue('lobstr'),
+        },
+        null,
+      );
+
+      const twoActionsPromise = firstValueFrom(
+        effects.rehydrateWalletOnLogin$.pipe(take(2), toArray()),
+      );
+      actions$.next(AuthActions.loginSuccess({ user: mockUser, token: mockToken }));
+      const emitted = await twoActionsPromise;
+
+      expect(emitted).toContainEqual(
+        WalletActions.selectWalletProvider({ providerType: 'lobstr' }),
+      );
     });
   });
 

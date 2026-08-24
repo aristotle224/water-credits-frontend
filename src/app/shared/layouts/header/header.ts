@@ -3,13 +3,19 @@ import { RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { AsyncPipe } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
-import { WalletConnectComponent } from '../../components/wallet-connect/wallet-connect';
+import {
+  WalletConnectComponent,
+  WalletPickEvent,
+} from '../../components/wallet-connect/wallet-connect';
 import { NotificationCenterComponent } from '../../components/notification-center/notification-center';
 import { AppState } from '../../../core/store/app.state';
 import { LucideAngularModule, Droplets, Sun, Moon, Menu } from 'lucide-angular';
 import { toggleSidebar, setDarkMode } from '../../../core/store/ui/ui.actions';
 import { selectIsDarkMode } from '../../../core/store/ui/ui.selectors';
-import { selectWalletAddress } from '../../../core/store/wallet/wallet.selectors';
+import {
+  selectWalletAddress,
+  selectSelectedWalletProvider,
+} from '../../../core/store/wallet/wallet.selectors';
 import * as AuthActions from '../../../core/store/auth/auth.actions';
 import * as WalletActions from '../../../core/store/wallet/wallet.actions';
 import { WalletService } from '../../../core/services/wallet.service';
@@ -64,6 +70,8 @@ import { WalletService } from '../../../core/services/wallet.service';
         <app-wallet-connect
           [connected]="!!(walletAddress$ | async)"
           [address]="(walletAddress$ | async) || ''"
+          [selectedProvider]="(selectedProvider$ | async) || 'freighter'"
+          (walletSelected)="onWalletSelected($event)"
           (connect)="connectWallet()"
           (disconnect)="disconnectWallet()"
         />
@@ -77,6 +85,8 @@ export class HeaderComponent implements OnInit, OnDestroy {
 
   /** The connected wallet address from the store (wallet slice). */
   protected readonly walletAddress$ = this.store.select(selectWalletAddress);
+  /** The currently-selected provider type (for the picker indicator). */
+  protected readonly selectedProvider$ = this.store.select(selectSelectedWalletProvider);
 
   protected isDarkMode = true;
   protected readonly MenuIcon = Menu;
@@ -103,6 +113,17 @@ export class HeaderComponent implements OnInit, OnDestroy {
 
   toggleSidebar(): void {
     this.store.dispatch(toggleSidebar());
+  }
+
+  /**
+   * The user picked a wallet from the picker drop-down.
+   * Tell the service which provider to use, then update the store slice.
+   * `connect()` is emitted immediately after by the component, so
+   * `connectWallet()` below will use the newly-selected provider.
+   */
+  onWalletSelected(event: WalletPickEvent): void {
+    this.walletService.selectProvider(event.providerType);
+    this.store.dispatch(WalletActions.selectWalletProvider({ providerType: event.providerType }));
   }
 
   async connectWallet(): Promise<void> {

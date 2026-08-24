@@ -10,3 +10,7 @@ export const selectIsWalletConnected = createSelector(
   selectWalletState,
   (state) => !!state.address,
 );
+export const selectSelectedWalletProvider = createSelector(
+  selectWalletState,
+  (state) => state.selectedProvider,
+);

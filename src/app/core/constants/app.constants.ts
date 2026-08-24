@@ -1,6 +1,8 @@
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'token',
   SENSOR_ALERT_THRESHOLDS: 'sensor-alert-thresholds',
+  /** Persists the user's chosen wallet provider across page reloads. */
+  WALLET_PROVIDER: 'wallet-provider',
 } as const;
 
 export const PAGINATION = {
