@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
+import { getApiError } from '../models/api-error.model';
 import {
   Retirement,
   RetirementRequest,
@@ -39,7 +40,7 @@ export class RetirementService {
       return await this.api.post<RetirementPrepareResponse>('/retirements/prepare', data);
     } catch (err: unknown) {
       // 404 → backend doesn't implement /prepare; fall back to single-POST.
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = getApiError(err)?.status;
       if (status === 404) {
         const retirement = await this.api.post<Retirement>('/retirements', data);
         // No XDR → the legacy backend already committed the record.

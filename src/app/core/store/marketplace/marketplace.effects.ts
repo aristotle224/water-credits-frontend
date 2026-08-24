@@ -8,6 +8,8 @@ import * as MarketplaceActions from './marketplace.actions';
 import { MarketplaceService } from '../../services/marketplace.service';
 import { WalletService } from '../../services/wallet.service';
 import { NotificationService } from '../../services/notification.service';
+import { getApiError } from '../../models/api-error.model';
+import { getErrorMessage } from '../../utils/error.utils';
 import { isUserDeclined, extractSigningError } from '../../utils/wallet-tx.utils';
 
 @Injectable()
@@ -70,11 +72,7 @@ export class MarketplaceEffects {
         from(this.marketplaceService.createListing(data)).pipe(
           map((listing) => MarketplaceActions.createListingSuccess({ listing })),
           catchError((err) =>
-            of(
-              MarketplaceActions.createListingFailure({
-                error: err instanceof Error ? err.message : 'Failed to create listing',
-              }),
-            ),
+            of(MarketplaceActions.createListingFailure(describeCreateListingError(err))),
           ),
         ),
       ),
@@ -295,4 +293,33 @@ export class MarketplaceEffects {
       ),
     { dispatch: false },
   );
+}
+
+/**
+ * Turn a failed POST /marketplace/listings into a user-facing message, using
+ * the HTTP status preserved by ApiService's ApiError normalisation.
+ *
+ * 422 carries per-field validation messages, so the offending field is passed
+ * through to the form which renders it inline against that input.
+ */
+function describeCreateListingError(err: unknown): { error: string; field?: string } {
+  const apiError = getApiError(err);
+
+  switch (apiError?.status) {
+    case 422: {
+      const fieldError = apiError.firstFieldError();
+      return fieldError
+        ? { error: fieldError.message, field: fieldError.field }
+        : { error: apiError.message };
+    }
+    case 403:
+      return { error: 'You are not allowed to list credits for this project.' };
+    case 409:
+      return {
+        error: 'These credits are already listed or no longer available to sell.',
+        field: 'amount',
+      };
+    default:
+      return { error: getErrorMessage(err, 'Failed to create listing') };
+  }
 }

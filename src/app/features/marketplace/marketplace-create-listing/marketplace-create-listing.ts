@@ -66,6 +66,9 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
               <option value="">Select a project</option>
               <option *ngFor="let p of projects" [value]="p.id">{{ p.name }}</option>
             </select>
+            <p *ngIf="fieldErrors.projectId" class="text-sm text-red-600 dark:text-red-400">
+              {{ fieldErrors.projectId }}
+            </p>
           </div>
 
           <div class="space-y-2">
@@ -86,6 +89,9 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
               placeholder="0.00"
               class="input w-full"
             />
+            <p *ngIf="fieldErrors.amount" class="text-sm text-red-600 dark:text-red-400">
+              {{ fieldErrors.amount }}
+            </p>
           </div>
 
           <div class="space-y-2">
@@ -103,6 +109,9 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
               placeholder="0.00"
               class="input w-full"
             />
+            <p *ngIf="fieldErrors.price" class="text-sm text-red-600 dark:text-red-400">
+              {{ fieldErrors.price }}
+            </p>
           </div>
 
           <div class="space-y-2">
@@ -190,6 +199,12 @@ export class MarketplaceCreateListingComponent implements OnInit, OnDestroy {
     price: 0,
   };
   projects: Project[] = [];
+  /**
+   * Server-reported validation messages keyed by form field, populated from
+   * the `field` carried on createListingFailure (HTTP 422/409). Rendered
+   * inline against the offending input.
+   */
+  fieldErrors: Partial<Record<keyof CreateListingRequest, string>> = {};
   loading = true;
   submitting$: Observable<boolean>;
 
@@ -232,7 +247,13 @@ export class MarketplaceCreateListingComponent implements OnInit, OnDestroy {
 
     this.actions$
       .pipe(ofType(MarketplaceActions.createListingFailure), takeUntil(this.destroy$))
-      .subscribe(({ error }) => {
+      .subscribe(({ error, field }) => {
+        if (field && this.isFormField(field)) {
+          // Field-level failure: show it against the input the server rejected.
+          // The generic toast is already raised by MarketplaceEffects.
+          this.fieldErrors = { ...this.fieldErrors, [field]: error };
+          return;
+        }
         this.notificationService.error('Error', error);
       });
   }
@@ -256,8 +277,21 @@ export class MarketplaceCreateListingComponent implements OnInit, OnDestroy {
     return !!this.form.projectId && parseFloat(this.form.amount) > 0 && this.form.price > 0;
   }
 
+  private static readonly FORM_FIELDS: readonly (keyof CreateListingRequest)[] = [
+    'projectId',
+    'amount',
+    'price',
+    'expiresAt',
+  ];
+
+  private isFormField(field: string): field is keyof CreateListingRequest {
+    return (MarketplaceCreateListingComponent.FORM_FIELDS as readonly string[]).includes(field);
+  }
+
   onSubmit(): void {
     if (!this.isValid) return;
+    // Drop stale server-side validation messages before re-submitting.
+    this.fieldErrors = {};
     this.store.dispatch(
       MarketplaceActions.createListing({
         data: {

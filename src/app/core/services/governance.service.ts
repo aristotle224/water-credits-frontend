@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
+import { getApiError } from '../models/api-error.model';
 import { Proposal, GovernanceConfig } from '../models/proposal.model';
 import { PaginatedResponse } from '../models/pagination.model';
 
@@ -39,7 +40,7 @@ export class GovernanceService {
         proposal?: Proposal;
       }>(`/governance/proposals/${proposalId}/vote/prepare`, { vote });
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = getApiError(err)?.status;
       if (status === 404) {
         await this.api.post<void>(`/governance/proposals/${proposalId}/vote`, { vote });
         return {};

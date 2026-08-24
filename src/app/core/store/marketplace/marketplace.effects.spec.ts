@@ -20,6 +20,14 @@ import {
 import { WalletService } from '../../services/wallet.service';
 import { NotificationService } from '../../services/notification.service';
 import * as MarketplaceActions from './marketplace.actions';
+import { ApiError } from '../../models/api-error.model';
+
+/** Builds the ApiError that ApiService produces for a given HTTP failure. */
+function apiError(status: number, data: unknown, message = 'Request failed'): ApiError {
+  return new ApiError(message, {
+    response: { status, statusText: '', data, headers: {} },
+  });
+}
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -205,6 +213,89 @@ describe('MarketplaceEffects', () => {
 
       expect(action).toEqual(
         MarketplaceActions.createListingFailure({ error: 'Insufficient balance' }),
+      );
+    });
+
+    it('surfaces the offending field from a 422 validation response', async () => {
+      marketplaceServiceMock.createListing.mockRejectedValue(
+        apiError(422, {
+          message: 'Validation failed',
+          errors: { amount: ['must not exceed your available balance'] },
+        }),
+      );
+
+      const resultPromise = firstValueFrom(effects.createListing$);
+      actions$.next(
+        MarketplaceActions.createListing({
+          data: { projectId: 'proj-1', amount: '5000', price: 2.5 },
+        }),
+      );
+      const action = await resultPromise;
+
+      expect(action).toEqual(
+        MarketplaceActions.createListingFailure({
+          error: 'must not exceed your available balance',
+          field: 'amount',
+        }),
+      );
+    });
+
+    it('maps a 409 conflict to a specific message on the amount field', async () => {
+      marketplaceServiceMock.createListing.mockRejectedValue(
+        apiError(409, { message: 'Conflict' }),
+      );
+
+      const resultPromise = firstValueFrom(effects.createListing$);
+      actions$.next(
+        MarketplaceActions.createListing({
+          data: { projectId: 'proj-1', amount: '5000', price: 2.5 },
+        }),
+      );
+      const action = await resultPromise;
+
+      expect(action).toEqual(
+        MarketplaceActions.createListingFailure({
+          error: 'These credits are already listed or no longer available to sell.',
+          field: 'amount',
+        }),
+      );
+    });
+
+    it('maps a 403 to an authorisation message with no field', async () => {
+      marketplaceServiceMock.createListing.mockRejectedValue(
+        apiError(403, { message: 'Forbidden' }),
+      );
+
+      const resultPromise = firstValueFrom(effects.createListing$);
+      actions$.next(
+        MarketplaceActions.createListing({
+          data: { projectId: 'proj-1', amount: '5000', price: 2.5 },
+        }),
+      );
+      const action = await resultPromise;
+
+      expect(action).toEqual(
+        MarketplaceActions.createListingFailure({
+          error: 'You are not allowed to list credits for this project.',
+        }),
+      );
+    });
+
+    it('falls back to the server message for a 422 without field errors', async () => {
+      marketplaceServiceMock.createListing.mockRejectedValue(
+        apiError(422, { message: 'Listing window closed' }, 'Listing window closed'),
+      );
+
+      const resultPromise = firstValueFrom(effects.createListing$);
+      actions$.next(
+        MarketplaceActions.createListing({
+          data: { projectId: 'proj-1', amount: '5000', price: 2.5 },
+        }),
+      );
+      const action = await resultPromise;
+
+      expect(action).toEqual(
+        MarketplaceActions.createListingFailure({ error: 'Listing window closed' }),
       );
     });
   });

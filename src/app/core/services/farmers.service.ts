@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
+import { getApiError } from '../models/api-error.model';
 import { Bmp } from '../models/bmp.model';
 
 /**
@@ -28,7 +29,7 @@ export class FarmersService {
     try {
       return await this.api.get<Bmp[]>('/farmers/practices');
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = getApiError(err)?.status;
       if (status === 404) {
         // Backend endpoint not yet available — degrade gracefully.
         return [];

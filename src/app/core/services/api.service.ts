@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { environment } from '../../../environments/environment';
+import { ApiError, ApiErrorResponse } from '../models/api-error.model';
 import { SessionBusService } from './session-bus.service';
 
 /**
@@ -12,6 +13,12 @@ import { SessionBusService } from './session-bus.service';
  *   once on startup, pointing at a Store selector read.  This avoids
  *   injecting Store here (which would create a circular DI chain via
  *   Effects → ApiService → Store).
+ *
+ * Error normalisation:
+ *   Every rejected request is normalised to an {@link ApiError} — an Error
+ *   subclass carrying `status`, `response`, `data` and the parsed field
+ *   errors — so consumers can branch on the HTTP status instead of matching
+ *   on message strings.  See mapError() below.
  *
  * 401 handling:
  *   On a 401 response, SessionBusService.notifyUnauthorized() is called.
@@ -77,10 +84,52 @@ export class ApiService {
     this.tokenProvider = provider;
   }
 
-  private mapError(error: AxiosError): { message: string; [key: string]: unknown } {
-    const message =
-      (error.response?.data as { message?: string })?.message ?? 'An unexpected error occurred';
-    return { ...error, message };
+  /**
+   * Normalise an AxiosError into an {@link ApiError}.
+   *
+   * NOTE: this deliberately does NOT spread `error`.  `AxiosError` extends
+   * `Error`, whose own properties are non-enumerable, so `{ ...error }` yields
+   * `{}` and throws away `response`, `status`, `code` and `stack`.  Every field
+   * consumers need is therefore copied across explicitly.
+   */
+  private mapError(error: AxiosError): ApiError {
+    const rawResponse = error.response;
+    const response: ApiErrorResponse | undefined = rawResponse
+      ? {
+          status: rawResponse.status,
+          statusText: rawResponse.statusText,
+          data: rawResponse.data,
+          headers: { ...rawResponse.headers } as Record<string, unknown>,
+        }
+      : undefined;
+
+    return new ApiError(this.resolveMessage(error), {
+      response,
+      code: error.code,
+      url: error.config?.url,
+      method: error.config?.method,
+      cause: error,
+    });
+  }
+
+  /**
+   * Friendly message shown to the user: the server-provided message when the
+   * body carries one, otherwise the same generic fallback as before.
+   */
+  private resolveMessage(error: AxiosError): string {
+    const data = error.response?.data as { message?: unknown; error?: unknown } | undefined;
+    const candidate = data?.message ?? data?.error;
+
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
+    if (Array.isArray(candidate)) {
+      const joined = candidate.filter((m): m is string => typeof m === 'string').join(', ');
+      if (joined.length > 0) {
+        return joined;
+      }
+    }
+    return 'An unexpected error occurred';
   }
 
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

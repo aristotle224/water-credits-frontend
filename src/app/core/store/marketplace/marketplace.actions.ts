@@ -56,9 +56,14 @@ export const createListingSuccess = createAction(
   props<{ listing: MarketplaceListing }>(),
 );
 
+/**
+ * `field` is set when the server returned a field-level validation error
+ * (HTTP 422) — the create-listing form uses it to render the message inline
+ * against the offending input instead of only firing a generic toast.
+ */
 export const createListingFailure = createAction(
   '[Marketplace] Create Listing Failure',
-  props<{ error: string }>(),
+  props<{ error: string; field?: string }>(),
 );
 
 // ─── Buy Listing ──────────────────────────────────────────────────────────────
