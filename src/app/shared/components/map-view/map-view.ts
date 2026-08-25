@@ -9,10 +9,15 @@ import {
   SimpleChanges,
   ViewChild,
   ElementRef,
+  Inject,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { PLATFORM_ID } from '@angular/core';
 import * as L from 'leaflet';
+import { environment } from '../../../../environments/environment';
 
+// Leaflet/webpack workaround: delete the default _getIconUrl method to fix marker icon paths
+// This is a known issue where Leaflet's default icon paths don't work with webpack bundling
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -107,6 +112,8 @@ export class MapViewComponent implements AfterViewInit, OnChanges, OnDestroy {
 
   private map: L.Map | null = null;
 
+  constructor(@Inject(PLATFORM_ID) private platformId: object) {}
+
   // â”€â”€ draw state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   protected pinPlaced = false;
   protected polygonClosed = false;
@@ -153,6 +160,11 @@ export class MapViewComponent implements AfterViewInit, OnChanges, OnDestroy {
   // â”€â”€ init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private initMap(): void {
+    // Guard against SSR: Leaflet requires a real DOM element
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.map = L.map(this.mapContainer.nativeElement, {
       center: [this.centerLat, this.centerLng],
       zoom: this.zoom,
@@ -160,8 +172,8 @@ export class MapViewComponent implements AfterViewInit, OnChanges, OnDestroy {
       scrollWheelZoom: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
+    L.tileLayer(environment.map.tileUrl, {
+      attribution: environment.map.attribution,
       maxZoom: 19,
     }).addTo(this.map);
 
