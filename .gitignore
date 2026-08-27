@@ -39,6 +39,12 @@ testem.log
 /typings
 __screenshots__/
 
+# Playwright e2e
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Husky
 .git/hooks/
 

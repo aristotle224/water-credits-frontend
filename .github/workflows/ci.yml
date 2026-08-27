@@ -129,3 +129,53 @@ jobs:
           # @angular/build:application output directory is dist/.
           path: dist/
           retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 4 — E2E (PLAYWRIGHT)
+  # Builds the app (service worker disabled) and runs the hermetic Playwright
+  # journey suite against an in-memory API stub and a mocked wallet provider.
+  # No live backend / Stellar testnet is contacted. On failure the HTML report
+  # and raw test results are uploaded as artifacts.
+  # ─────────────────────────────────────────────────────────────────────────────
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare environment file
+        run: cp src/environments/environment.ts.example src/environments/environment.ts
+
+      - name: Run Playwright e2e suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        # Upload on failure so regressions are debuggable; the report is small.
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        # Always upload raw traces/screenshots for post-mortem analysis.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 14

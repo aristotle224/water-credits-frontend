@@ -3,7 +3,24 @@ import { WalletProvider, WalletProviderType } from './wallet.provider';
 import { FreighterWalletProvider } from './freighter.provider';
 import { LobstrWalletProvider } from './lobstr.provider';
 import { XBullWalletProvider } from './xbull.provider';
+import { E2EWalletProvider } from './e2e-wallet.provider';
 import { STORAGE_KEYS } from '../../../core/constants/app.constants';
+
+/**
+ * Global flag set by the Playwright e2e fixtures (via `page.addInitScript`)
+ * before the application boots. When present, the `freighter` slot is replaced
+ * by {@link E2EWalletProvider} so the suite never depends on a real wallet
+ * extension or the Stellar testnet. It is never set in production.
+ */
+const E2E_WALLET_ADDRESS_KEY = '__WC_E2E_WALLET_ADDRESS__';
+
+function readE2EWalletAddress(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const value = (window as unknown as Record<string, string | undefined>)[
+    E2E_WALLET_ADDRESS_KEY
+  ];
+  return value && value.length > 0 ? value : undefined;
+}
 
 /** Metadata used to populate the wallet-picker UI. */
 export interface WalletProviderMeta {
@@ -29,16 +46,22 @@ export interface WalletProviderMeta {
  * singleton across the application and can be injected wherever needed.
  * Provider *instances* are plain class instances — they do not need Angular DI.
  */
-@Injectable({ providedIn: 'root' })
-export class WalletProviderRegistry {
-  private readonly providers: Map<WalletProviderType, WalletProvider> = new Map<
-    WalletProviderType,
-    WalletProvider
-  >([
-    ['freighter', new FreighterWalletProvider()],
-    ['lobstr', new LobstrWalletProvider()],
-    ['xbull', new XBullWalletProvider()],
-  ]);
+  @Injectable({ providedIn: 'root' })
+  export class WalletProviderRegistry {
+    private readonly providers: Map<WalletProviderType, WalletProvider>;
+
+    constructor() {
+      const e2eAddress = readE2EWalletAddress();
+      const freighter = e2eAddress
+        ? new E2EWalletProvider(e2eAddress)
+        : new FreighterWalletProvider();
+
+      this.providers = new Map<WalletProviderType, WalletProvider>([
+        ['freighter', freighter],
+        ['lobstr', new LobstrWalletProvider()],
+        ['xbull', new XBullWalletProvider()],
+      ]);
+    }
 
   /**
    * Returns metadata for all registered providers, sorted: available ones

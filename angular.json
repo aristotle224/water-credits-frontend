@@ -49,6 +49,14 @@
               ],
               "outputHashing": "all"
             },
+            "e2e": {
+              "optimization": false,
+              "sourceMap": true,
+              "namedChunks": true,
+              "outputHashing": "none",
+              "serviceWorker": false,
+              "budgets": []
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,
